@@ -1,0 +1,31 @@
+{
+  "brand": "Feri LAN",
+  "tagline": "LAN with your friends, as if you're in the same room",
+  "brief": "A Windows app that puts friends on one virtual LAN through a relay server in Iran, so LAN games work with low ping. The audience is gamer friends. The feel: fast, friendly, sleek, a bit of night-time neon.",
+  "adjectives": ["fast", "friendly", "sleek", "nocturnal"],
+  "criteria": "Distinct from globes, gamepads and wifi icons; readable at 16 px; works in one colour; neon green on near-black.",
+  "mockups": ["app-icon", "favicon-tab", "website", "sticker", "tshirt", "social"],
+  "nav": ["Download", "How it works", "Invite"],
+  "brand_color": "#39FF6E",
+  "tile_color": "#0A0F0C",
+  "greyscale": false,
+  "designer": "Claude",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Route F",
+      "symbol": "final/feri-symbol-neon.svg",
+      "lockup": "final/feri-horizontal-light.svg",
+      "symbol_on_tile": "final/feri-symbol-neon.svg",
+      "lockup_on_dark": "final/feri-horizontal-on-dark.svg",
+      "idea": "An F drawn as a route map: every terminal is a player.",
+      "rationale": [
+        "Says the name (F) and the job (one route connecting several players)",
+        "Neon green on near-black: gamer night-time, but restrained and sleek",
+        "Separate heavier small-size cut for favicon and Windows icon"
+      ]
+    }
+  ],
+  "recommendation": "Route F in neon green #39FF6E on night #0A0F0C; deep green #00A846 on light backgrounds.",
+  "next_steps": ["Use the icon in the app", "Splash/About screen with the lockup", "Trademark search before public release"]
+}
