@@ -33,6 +33,8 @@ void main() {
     const s = (host: 'lan.example.com', port: 9393, password: 'Ab3_x-yz');
     expect(Config.parseInvite(Config.invite(s)), s);
     expect(Config.parseInvite('  ${Config.invite(s)}\n'), s);
+    expect(Config.parseInvite('Join my server: ${Config.invite(s)} see you'), s);
+    expect(Config.parseInvite('ferilan://join/?host=lan.example.com&port=9393&pass=Ab3_x-yz'), s);
     expect(Config.parseInvite('lan.example.com'), isNull);
     expect(Config.parseInvite('https://join?host=a.com&port=9393&pass=Ab3_x-yz'), isNull);
     expect(Config.parseInvite('ferilan://join?host=a.com&port=9393'), isNull);

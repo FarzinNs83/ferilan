@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'widgets.dart';
 
-const appVersion = '1.0.0'; // keep in step with pubspec.yaml and installer/FeriLAN.iss
+const appVersion = '1.0.1'; // keep in step with pubspec.yaml and installer/FeriLAN.iss
 const repoUrl = 'https://github.com/FarzinNs83/feri-lan';
 
 /// What the app is, how to play, and what it does and does not do yet.

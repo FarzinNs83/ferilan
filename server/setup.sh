@@ -164,5 +164,9 @@ cat << EOF
       Port:     ${PORT}
       Password: ${PASSWORD}
 
+    Or send them this invite link; pasted into FeriLAN > Settings > Invite link, it joins at once:
+
+      ferilan://join?host=${HOST}&port=${PORT}&pass=${PASSWORD}
+
     Open UDP+TCP ${PORT} and TCP ${STATUS_PORT} in your provider's firewall too, if it has one.
 EOF

@@ -4,7 +4,7 @@
 ; Output: dist\FeriLAN-Setup-<version>.exe
 
 #define AppName "FeriLAN"
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 #define BuildDir "..\build\windows\x64\runner\Release"
 
 [Setup]

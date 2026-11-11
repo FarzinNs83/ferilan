@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -17,72 +18,99 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late final Config cfg = widget.lan.config;
+  Lan get lan => widget.lan;
+  Config get cfg => lan.config;
   late final name = TextEditingController(text: cfg.name);
-  late final servers = [...cfg.servers];
-  late int current = cfg.current;
-  late LinkMode mode = cfg.mode;
-  late bool boot = cfg.startWithWindows, auto = cfg.connectOnLaunch, tray = cfg.closeToTray, fixLan = cfg.fixLan, p2p = cfg.p2p;
+  final invite = TextEditingController();
   bool advanced = false, repairing = false;
-  String? problem;
+  String? problem, joined;
   int? copiedInvite;
+  Timer? _relink;
+  late String _linked = _linkKey;
+
+  /// What the running feri-edge.exe was started with; a change here means reconnecting.
+  String get _linkKey => '${cfg.server}|${cfg.name}|${cfg.mode}|${cfg.p2p}';
 
   void copyInvite(int i) {
-    Clipboard.setData(ClipboardData(text: Config.invite(servers[i])));
+    Clipboard.setData(ClipboardData(text: Config.invite(cfg.servers[i])));
     setState(() => copiedInvite = i);
     Future.delayed(const Duration(milliseconds: 1400), () => mounted && copiedInvite == i ? setState(() => copiedInvite = null) : null);
   }
 
   @override
+  void initState() {
+    super.initState();
+    lan.addListener(_lanChanged); // an invite opened from outside adds a server while this page is up
+  }
+
+  void _lanChanged() => setState(() {});
+
+  @override
   void dispose() {
+    lan.removeListener(_lanChanged);
+    if (_relink?.isActive ?? false) {
+      _relink!.cancel();
+      _reconnect();
+    }
     name.dispose();
+    invite.dispose();
     super.dispose();
   }
 
-  Future<void> editServer([int? i]) async {
-    final s = await showDialog<Server>(context: context, builder: (_) => ServerDialog(server: i == null ? null : servers[i]));
-    if (s == null) return;
-    setState(() {
+  /// Every change is saved at once; the link restarts a moment later, so typing a name does not reconnect on each key.
+  void apply(VoidCallback change) {
+    setState(change);
+    cfg.save();
+    lan.refresh();
+    _relink?.cancel();
+    if (_linkKey != _linked) _relink = Timer(const Duration(milliseconds: 1200), _reconnect);
+  }
+
+  void _reconnect() {
+    _linked = _linkKey;
+    if (lan.phase != Phase.off) {
+      lan.stop();
+      lan.connect();
+    }
+  }
+
+  void nameChanged(String text) {
+    final n = text.trim(), bad = Config.checkName(n);
+    if (bad != null) return setState(() => problem = bad);
+    apply(() {
       problem = null;
+      cfg.name = n;
+    });
+  }
+
+  /// A valid invite link joins its server as soon as it is pasted.
+  void inviteChanged(String text) {
+    final s = Config.parseInvite(text);
+    if (s == null) return setState(() => joined = text.trim().isEmpty ? null : 'Not a FeriLAN invite link.');
+    _relink?.cancel();
+    lan.join(s);
+    _linked = _linkKey;
+    invite.clear();
+    setState(() => joined = cfg.ready ? 'Joined ${s.host}:${s.port}.' : 'Added ${s.host}:${s.port}. Now type your name.');
+  }
+
+  Future<void> editServer([int? i]) async {
+    final s = await showDialog<Server>(context: context, builder: (_) => ServerDialog(server: i == null ? null : cfg.servers[i]));
+    if (s == null) return;
+    apply(() {
       if (i != null) {
-        servers[i] = s;
+        cfg.servers[i] = s;
       } else {
-        servers.add(s);
-        current = servers.length - 1;
+        cfg.servers.add(s);
+        cfg.current = cfg.servers.length - 1;
       }
     });
   }
 
-  void removeServer(int i) => setState(() {
-        servers.removeAt(i);
-        if (i < current || current >= servers.length) current = math.max(0, current - 1);
+  void removeServer(int i) => apply(() {
+        cfg.servers.removeAt(i);
+        if (i < cfg.current || cfg.current >= cfg.servers.length) cfg.current = math.max(0, cfg.current - 1);
       });
-
-  Future<void> save() async {
-    final n = name.text.trim();
-    final bad = servers.isEmpty ? 'Add a server.' : Config.checkName(n);
-    if (bad != null) return setState(() => problem = bad);
-    final relink = servers[current] != cfg.server || n != cfg.name || mode != cfg.mode || p2p != cfg.p2p;
-    if (boot != cfg.startWithWindows) await Lan.setStartWithWindows(boot);
-    cfg
-      ..servers = servers
-      ..current = current
-      ..name = n
-      ..mode = mode
-      ..startWithWindows = boot
-      ..connectOnLaunch = auto
-      ..closeToTray = tray
-      ..fixLan = fixLan
-      ..p2p = p2p
-      ..save();
-    final lan = widget.lan;
-    if (relink && lan.phase != Phase.off) {
-      lan.stop();
-      lan.connect();
-    }
-    lan.refresh();
-    if (mounted) Navigator.of(context).pop();
-  }
 
   Future<void> repair() async {
     setState(() => repairing = true);
@@ -107,14 +135,13 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         Expanded(
           child: ListView(padding: const EdgeInsets.fromLTRB(20, 20, 20, 12), children: [
-            Rise(child: _servers()),
+            Rise(child: field('INVITE LINK', invite, hint: 'ferilan://join?…', help: joined ?? 'Got a link from a friend? Paste it here to join.', onChanged: inviteChanged)),
+            const SizedBox(height: 16),
+            Rise(delay: const Duration(milliseconds: 30), child: _servers()),
             const SizedBox(height: 16),
             Rise(
               delay: const Duration(milliseconds: 60),
-              child: field('YOUR NAME', name,
-                  hint: 'player1',
-                  help: 'English letters and digits. Friends see you by this name.',
-                  onChanged: (_) => problem == null ? null : setState(() => problem = null)),
+              child: field('YOUR NAME', name, hint: 'player1', help: 'English letters and digits. Friends see you by this name.', onChanged: nameChanged),
             ),
             const SizedBox(height: 16),
             Rise(
@@ -149,11 +176,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ]),
         ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-          decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.lineSoft))),
-          child: buttons(onCancel: canLeave ? () => Navigator.of(context).pop() : null, onSave: save),
-        ),
       ]),
     );
   }
@@ -166,11 +188,11 @@ class _SettingsPageState extends State<SettingsPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: C.line)),
           clipBehavior: Clip.antiAlias,
           child: Column(children: [
-            for (final (i, s) in servers.indexed)
+            for (final (i, s) in cfg.servers.indexed)
               Semantics(
-                selected: i == current,
+                selected: i == cfg.current,
                 child: InkWell(
-                  onTap: () => setState(() => current = i),
+                  onTap: () => apply(() => cfg.current = i),
                   child: Padding(
                     padding: const EdgeInsets.only(left: 14, right: 4),
                     child: Row(children: [
@@ -178,11 +200,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         duration: const Duration(milliseconds: 200),
                         width: 8,
                         height: 8,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: i == current ? C.accent : C.edge),
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: i == cfg.current ? C.accent : C.edge),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text('${s.host}:${s.port}', overflow: TextOverflow.ellipsis, style: mono(13, FontWeight.w500, i == current ? C.text : C.muted)),
+                        child: Text('${s.host}:${s.port}', overflow: TextOverflow.ellipsis, style: mono(13, FontWeight.w500, i == cfg.current ? C.text : C.muted)),
                       ),
                       IconButton(
                         tooltip: copiedInvite == i ? 'Invite link copied' : 'Copy invite link',
@@ -195,7 +217,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
-            if (servers.isNotEmpty) const Divider(height: 1, color: C.lineSoft),
+            if (cfg.servers.isNotEmpty) const Divider(height: 1, color: C.lineSoft),
             InkWell(
               onTap: editServer,
               child: SizedBox(
@@ -211,7 +233,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
         ),
         const SizedBox(height: 6),
-        Text('Tap one to connect to it. Send friends its invite link, or paste one you got into Add server.', style: sans(12, FontWeight.w400, C.muted)),
+        Text('Tap one to connect to it. Send friends its invite link.', style: sans(12, FontWeight.w400, C.muted)),
       ]);
 
   Widget _advanced() => Padding(
@@ -226,17 +248,17 @@ class _SettingsPageState extends State<SettingsPage> {
               for (final m in LinkMode.values)
                 Expanded(
                   child: Semantics(
-                    selected: mode == m,
+                    selected: cfg.mode == m,
                     child: GestureDetector(
-                      onTap: () => setState(() => mode = m),
+                      onTap: () => apply(() => cfg.mode = m),
                       child: MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           height: 36,
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(color: mode == m ? C.accent : Colors.transparent, borderRadius: BorderRadius.circular(8)),
-                          child: Text(m.name.toUpperCase().replaceFirst('AUTO', 'Auto'), style: sans(13, FontWeight.w700, mode == m ? C.bg : C.muted)),
+                          decoration: BoxDecoration(color: cfg.mode == m ? C.accent : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+                          child: Text(m.name.toUpperCase().replaceFirst('AUTO', 'Auto'), style: sans(13, FontWeight.w700, cfg.mode == m ? C.bg : C.muted)),
                         ),
                       ),
                     ),
@@ -246,7 +268,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            switch (mode) {
+            switch (cfg.mode) {
               LinkMode.auto => 'UDP first; switches to TCP if your network blocks UDP.',
               LinkMode.udp => 'Lowest ping. Fails on networks that block UDP.',
               LinkMode.tcp => 'Works almost everywhere, but lag spikes on packet loss.',
@@ -258,11 +280,14 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.line)),
             child: Column(children: [
-              _switch('Start with Windows', 'Opens in the tray when you log in.', boot, (v) => setState(() => boot = v)),
-              _switch('Connect on launch', 'Joins the server as soon as the app starts.', auto, (v) => setState(() => auto = v)),
-              _switch('Close to tray', 'The X button hides the window; quit from the tray.', tray, (v) => setState(() => tray = v)),
-              _switch('Fix LAN discovery', 'Puts FeriLAN first so games see LAN servers.', fixLan, (v) => setState(() => fixLan = v)),
-              _switch('Direct connection (P2P)', 'Lower ping when your networks allow it; otherwise stays on the server. UDP only.', p2p, (v) => setState(() => p2p = v)),
+              _switch('Start with Windows', 'Opens in the tray when you log in.', cfg.startWithWindows, (v) {
+                apply(() => cfg.startWithWindows = v);
+                Lan.setStartWithWindows(v);
+              }),
+              _switch('Connect on launch', 'Joins the server as soon as the app starts.', cfg.connectOnLaunch, (v) => apply(() => cfg.connectOnLaunch = v)),
+              _switch('Close to tray', 'The X button hides the window; quit from the tray.', cfg.closeToTray, (v) => apply(() => cfg.closeToTray = v)),
+              _switch('Fix LAN discovery', 'Puts FeriLAN first so games see LAN servers.', cfg.fixLan, (v) => apply(() => cfg.fixLan = v)),
+              _switch('Direct connection (P2P)', 'Lower ping when your networks allow it; otherwise stays on the server. UDP only.', cfg.p2p, (v) => apply(() => cfg.p2p = v)),
             ]),
           ),
           const SizedBox(height: 16),

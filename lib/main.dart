@@ -101,7 +101,7 @@ class _FeriLANState extends State<FeriLAN> with WindowListener, TrayListener {
     );
     if (ok != true) return;
     lan.join(s);
-    // no name yet: a Settings page opened before the join holds the old server list, so open a fresh one
+    // no name yet: bring up Settings so they can type one
     if (!lan.config.ready) _openSettings();
   }
 

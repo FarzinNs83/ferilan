@@ -92,9 +92,11 @@ class Config {
   /// A link that holds everything a friend needs: ferilan://join?host=…&port=…&pass=…
   static String invite(Server s) => Uri(scheme: 'ferilan', host: 'join', queryParameters: {'host': s.host, 'port': '${s.port}', 'pass': s.password}).toString();
 
-  /// The server in an invite link, or null when [text] is not a valid one; it comes from outside, so it is checked like typed input.
+  /// The server in the invite link found in [text] (a pasted chat message works too), or null when there is no valid one;
+  /// it comes from outside, so it is checked like typed input.
   static Server? parseInvite(String text) {
-    final u = Uri.tryParse(text.trim());
+    final m = RegExp(r'ferilan://\S+', caseSensitive: false).firstMatch(text);
+    final u = m == null ? null : Uri.tryParse(m[0]!);
     if (u == null || u.scheme != 'ferilan' || u.host != 'join') return null;
     final q = u.queryParameters;
     final host = q['host'] ?? '', port = q['port'] ?? '', pass = q['pass'] ?? '';
